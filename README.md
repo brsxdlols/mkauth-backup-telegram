@@ -4,6 +4,9 @@ Addon desenvolvido para configurar o envio automático do backup MK-AUTH ao Tele
 
 ## Recursos
 
+- Busca de chats pelo token digitado, seleção de grupo ou conversa e guia de criação do bot. A busca não salva o destino automaticamente, não remove webhooks e não confirma ou apaga atualizações do bot.
+
+
 - Token em texto visível, Chat ID e nome do MK-AUTH na tela de configuração.
 - Ativação/desativação imediata e horário diário configurável.
 - Teste de integração: valida o bot, consulta o chat e envia uma mensagem de confirmação.
@@ -24,7 +27,7 @@ O addon usa a autenticação nativa e exige `sis_perm.perm_backup = sim` para o 
 Como root, baixe o instalador e execute:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/brsxdlols/mkauth-backup-telegram/v1.2.0/instalar.sh -o /root/instalar-backup-telegram.sh
+curl -fsSL https://raw.githubusercontent.com/brsxdlols/mkauth-backup-telegram/v1.3.0/instalar.sh -o /root/instalar-backup-telegram.sh
 bash /root/instalar-backup-telegram.sh
 ```
 
@@ -67,4 +70,4 @@ Configuração e histórico ficam fora da pasta pública, com arquivos `600` em 
 
 ## Validação e origem
 
-A versão 1.2.0 foi preparada a partir do addon usado no Visual Net. Os testes de instalação usam uma árvore temporária isolada; não acionam envio nem restauração. Credenciais, configurações e arquivos de backup de produção não são distribuídos.
+A versão 1.3.0 foi preparada a partir do addon usado no Visual Net. Os testes de instalação usam uma árvore temporária isolada; não acionam envio nem restauração. Credenciais, configurações e arquivos de backup de produção não são distribuídos.
