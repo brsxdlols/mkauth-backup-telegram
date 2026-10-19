@@ -1,0 +1,29 @@
+(function(){'use strict';
+var active=false,currentEnabled=false,poll=null,modal=document.getElementById('send-modal'),bar=document.getElementById('send-progress'),percent=document.getElementById('send-percent'),message=document.getElementById('send-message'),close=document.getElementById('send-close');
+var form=document.getElementById('settings'),notice=document.getElementById('notice');
+function paint(s){if(!s.ok)return;var c=s.config;currentEnabled=c.enabled;document.getElementById('auto-toggle').textContent=c.enabled?'Desativar envio':'Ativar envio';form.elements.enabled.checked=c.enabled;document.getElementById('auto-status').textContent=c.enabled?'Ativado':'Desativado';document.getElementById('schedule-status').textContent=c.time;document.getElementById('latest-name').textContent=s.latest?s.latest.name:'Nenhum arquivo';document.getElementById('latest-info').textContent=s.latest?s.latest.date+' · '+(s.latest.size/1048576).toFixed(2)+' MB':'';var body=document.getElementById('history');body.textContent='';(s.history||[]).forEach(function(r){var tr=document.createElement('tr');[r.date,({test:'Teste de integração',send:'Envio manual',tick:'Envio automático',inspect:'Teste de integridade'})[r.action]||r.action,r.message].forEach(function(v){var td=document.createElement('td');td.textContent=v;tr.appendChild(td);});tr.className=r.ok?'success':'error';body.appendChild(tr);});if(!body.children.length){var tr=document.createElement('tr'),td=document.createElement('td');td.colSpan=3;td.textContent='Nenhuma operação registrada ainda.';tr.appendChild(td);body.appendChild(tr);}}
+async function call(action){var data=new FormData(form);data.set('action',action);if(action==='toggle')data.set('enabled',currentEnabled?'0':'1');var r=await fetch(location.href,{method:'POST',body:data,credentials:'same-origin'});return await r.json();}
+function openLoading(title,text,measured){document.getElementById('send-title').textContent=title;message.textContent=text;percent.textContent=measured?'0%':'Processando…';if(measured)bar.value=0;else bar.removeAttribute('value');close.hidden=true;if(!modal.open)modal.showModal();}
+function completeLoading(text,ok){clearInterval(poll);if(ok){bar.value=100;percent.textContent='Concluído';}else{bar.value=0;percent.textContent='Não concluído';}message.textContent=text;close.textContent='Fechar';close.hidden=false;}
+async function run(action){
+ if(active)return;if((action==='save'||action==='save-send')&&!form.reportValidity())return;active=true;
+ var sending=action==='send'||action==='save-send';
+ var titles={send:'Enviando backup','save-send':'Salvando e enviando backup',save:'Salvando configuração',test:'Testando integração com o chat',inspect:'Verificando integridade do backup',toggle:currentEnabled?'Desativando envio automático':'Ativando envio automático'};
+ openLoading(titles[action]||'Processando',action==='inspect'?'Verificando a compressão e calculando o SHA-256. Aguarde…':'Aguarde a conclusão da operação…',sending);
+ if(sending){var started=Date.now();poll=setInterval(async function(){try{var s=await call('status'),p=s.progress;if(active&&close.hidden&&p&&p.updated*1000>=started-1000){bar.value=p.percent;percent.textContent=p.percent+'%';message.textContent=p.phase;}}catch(e){}},1000);}
+ var buttons=document.querySelectorAll('#backup-app button');buttons.forEach(function(b){b.disabled=true;});notice.hidden=false;notice.className='pending';notice.textContent=message.textContent;
+ try{var r=await call(action==='save-send'?'save':action);if(r.ok&&action==='save-send')r=await call('send');notice.className=r.ok?'success':'error';notice.textContent=r.message;completeLoading(r.message,r.ok);try{paint(await call('status'));}catch(e){} }
+ catch(e){notice.className='error';notice.textContent='Não foi possível obter o resultado. Consulte o histórico antes de repetir a operação.';completeLoading(notice.textContent,false);}
+ finally{active=false;clearInterval(poll);buttons.forEach(function(b){b.disabled=false;});}
+}
+close.addEventListener('click',function(){modal.close();});modal.addEventListener('cancel',function(e){if(active)e.preventDefault();});
+document.getElementById('auto-toggle').addEventListener('click',function(){run('toggle');});
+document.getElementById('latest-name').addEventListener('click',async function(){
+ if(active)return;active=true;openLoading('Baixando backup','Preparando o arquivo para download…',false);
+ var buttons=document.querySelectorAll('#backup-app button');buttons.forEach(function(b){b.disabled=true;});
+ try{var data=new FormData();data.set('csrf',form.elements.csrf.value);data.set('action','download');var response=await fetch(location.href,{method:'POST',body:data,credentials:'same-origin'});if(!response.ok||!(response.headers.get('content-type')||'').includes('application/octet-stream'))throw new Error();var blob=await response.blob();if(!blob.size)throw new Error();var url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download=document.getElementById('latest-name').textContent;a.style.display='none';document.body.appendChild(a);a.click();a.remove();setTimeout(function(){URL.revokeObjectURL(url);},60000);completeLoading('Arquivo recebido. O download foi encaminhado ao navegador.',true);}
+ catch(e){completeLoading('Não foi possível baixar o backup. Recarregue a página e tente novamente.',false);}
+ finally{active=false;buttons.forEach(function(b){b.disabled=false;});}
+});
+form.addEventListener('submit',function(e){e.preventDefault();run('save');});document.querySelectorAll('[data-action]').forEach(function(b){b.addEventListener('click',function(){run(b.dataset.action);});});paint(JSON.parse(document.getElementById('initial-data').textContent));
+}());

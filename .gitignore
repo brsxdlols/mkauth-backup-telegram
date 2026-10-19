@@ -1,0 +1,14 @@
+# Configuração e dados de execução nunca pertencem ao repositório.
+config.json
+history.json
+schedule.json
+progress.json
+*.maz
+*.sql
+*.log
+*.pem
+*.key
+.env*
+__pycache__/
+*.pyc
+install-backups/

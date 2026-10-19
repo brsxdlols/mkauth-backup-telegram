@@ -1,0 +1,43 @@
+<?php
+ob_start();
+require_once __DIR__.'/addons.class.php';
+require_once '/opt/mk-auth/include/conexao.php';
+$link = $LOADMYSQL;
+header('Cache-Control: no-store');
+$user=$_SESSION['MKA_Usuario']??($_SESSION['MM_Usuario']??'');
+$q=mysqli_prepare($link,"SELECT 1 FROM sis_perm WHERE usuario=? AND nome='perm_backup' AND permissao='sim' LIMIT 1");
+mysqli_stmt_bind_param($q,'s',$user);mysqli_stmt_execute($q);mysqli_stmt_store_result($q);
+if(!$user||mysqli_stmt_num_rows($q)!==1){http_response_code(403);exit('Seu usuário não tem permissão para gerenciar backups.');}
+mysqli_stmt_close($q);
+if(empty($_SESSION['backup_tg_csrf']))$_SESSION['backup_tg_csrf']=bin2hex(random_bytes(32));
+function backend($data){
+ $p=proc_open(['/usr/bin/sudo','-n','/usr/bin/php','/usr/local/lib/mka-backup-telegram/service.php'],[['pipe','r'],['pipe','w'],['pipe','w']],$pipes);
+ if(!is_resource($p))return ['ok'=>false,'message'=>'Serviço indisponível.'];
+ fwrite($pipes[0],json_encode($data));fclose($pipes[0]);$out=stream_get_contents($pipes[1]);fclose($pipes[1]);fclose($pipes[2]);proc_close($p);
+ return json_decode($out,true)?:['ok'=>false,'message'=>'Não foi possível consultar o serviço.'];
+}
+if($_SERVER['REQUEST_METHOD']==='POST'){
+ ob_clean();
+ header('Content-Type: application/json; charset=utf-8');
+ if(!is_string($_POST['csrf']??null)||!hash_equals($_SESSION['backup_tg_csrf'],$_POST['csrf'])){http_response_code(403);echo json_encode(['ok'=>false,'message'=>'Sessão expirada. Recarregue a página.']);exit;}
+ $action=$_POST['action']??'';if(!in_array($action,['save','test','send','status','toggle','inspect','download'],true)){http_response_code(400);exit;}
+ if($action==='download'){
+ session_write_close();set_time_limit(650);$state=backend(['action'=>'status']);if(empty($state['latest'])){http_response_code(404);exit;}
+ header('Content-Type: application/octet-stream');header('Content-Disposition: attachment; filename="'.preg_replace('/[^A-Za-z0-9_.-]/','_',$state['latest']['name']).'"');header('X-Content-Type-Options: nosniff');ob_end_clean();
+ $p=proc_open(['/usr/bin/sudo','-n','/usr/bin/php','/usr/local/lib/mka-backup-telegram/service.php'],[['pipe','r'],['pipe','w'],['file','/dev/null','w']],$pipes);if(is_resource($p)){fwrite($pipes[0],json_encode(['action'=>'download']));fclose($pipes[0]);fpassthru($pipes[1]);fclose($pipes[1]);proc_close($p);}exit;
+ }
+ session_write_close();set_time_limit(650);
+ echo json_encode(backend(['action'=>$action,'token'=>$_POST['token']??'','chat'=>$_POST['chat']??'','name'=>$_POST['name']??'','time'=>$_POST['time']??'','enabled'=>($_POST['enabled']??'')==='1']));exit;
+}
+$status=backend(['action'=>'status']);$c=$status['config']??[];
+function h($v){return htmlspecialchars((string)$v,ENT_QUOTES,'UTF-8');}
+?>
+<!doctype html><html lang="pt-BR" class="has-navbar-fixed-top"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Backup Telegram · MK-AUTH</title><link rel="stylesheet" href="../../estilos/mk-auth.css"><script src="../../scripts/jquery.js"></script><script src="../../scripts/mk-auth.js"></script><link rel="stylesheet" href="app.css?v=2"></head><body>
+<?php include('../../topo.php'); ?>
+<main id="backup-app"><header class="hero"><div><small>PROVEDOR · SEGURANÇA DOS DADOS</small><h1>Backup Telegram</h1><p>Configure o destino, valide a integração e acompanhe seus envios.</p></div><a href="/admin/">Voltar ao MK-AUTH</a></header>
+<div id="notice" role="status" aria-live="polite" hidden></div>
+<section class="stats"><article><span>Envio automático</span><strong id="auto-status"></strong><button type="button" id="auto-toggle" class="secondary">Desativar</button></article><article><span>Horário diário</span><strong id="schedule-status"></strong><small><?= h($status['timezone']??'') ?></small></article><article><span>Último backup disponível</span><button type="button" id="latest-name" class="backup-download" title="Baixar backup"></button><small id="latest-info"></small></article></section>
+<div class="columns-grid"><section class="card"><h2>Configuração da integração</h2><p>Adicione seu bot ao chat de destino. Em conversa privada, inicie o bot antes de testar.</p><form id="settings"><input type="hidden" name="csrf" value="<?= h($_SESSION['backup_tg_csrf']) ?>"><label>Token do bot<input type="text" name="token" value="<?= h($c['token']??'') ?>" autocomplete="new-password" placeholder="<?= !empty($c['token_set'])?'Token configurado — deixe vazio para manter':'Informe o token fornecido pelo BotFather' ?>" maxlength="180"></label><div class="fields"><label>Chat ID<input name="chat" value="<?= h($c['chat']??'') ?>" placeholder="Ex.: -1001234567890" required maxlength="26"></label><label>Nome do MK-AUTH<input name="name" value="<?= h($c['name']??'') ?>" required maxlength="120"></label></div><div class="schedule"><label class="toggle"><input type="checkbox" name="enabled" value="1" <?= !empty($c['enabled'])?'checked':'' ?>> Ativar envio automático diário</label><label>Horário do servidor<input type="time" name="time" value="<?= h($c['time']??'06:30') ?>" required></label></div><p class="help">O addon envia o backup mais recente gerado pelo MK-AUTH. Token visível apenas para usuários com permissão de backup.</p><div class="actions"><button type="submit">Salvar configuração</button><button type="button" data-action="save-send" class="secondary">Salvar e enviar agora</button></div></form></section>
+<section class="card"><h2>Sincronizar e testar</h2><p>Salve suas alterações antes de executar os testes abaixo.</p><div class="action-card"><h3>1. Validar integração com o chat</h3><p>Verifica o bot, consulta o chat e envia uma mensagem de confirmação.</p><button type="button" data-action="test" class="secondary">Sincronizar e testar integração</button></div><div class="action-card"><h3>2. Enviar backup de teste</h3><p>Envia o arquivo real mais recente ao chat configurado. Pode levar alguns minutos.</p><button type="button" data-action="send">Enviar backup agora</button></div><div class="action-card"><h3>3. Verificar integridade do backup</h3><p>Testa a compressão bzip2 sem restaurar ou alterar dados. Não substitui uma restauração de teste.</p><button type="button" data-action="inspect" class="secondary">Testar integridade do backup</button></div><p class="help">Arquivos de até 50 MB. Backups recém-criados aguardam dois minutos antes do envio. O addon mantém os últimos 100 registros e não cria cópias dos backups.</p></section></div>
+<section class="card"><h2>Histórico de operações</h2><p>Resultado dos testes e envios automáticos ou manuais.</p><div class="history-scroll"><table><thead><tr><th>Data e hora</th><th>Operação</th><th>Resultado</th></tr></thead><tbody id="history"></tbody></table></div></section><dialog id="send-modal" aria-labelledby="send-title"><h2 id="send-title">Enviando backup</h2><p id="send-message" role="status">Preparando envio…</p><progress id="send-progress" max="100" value="0"></progress><strong id="send-percent">0%</strong><p class="help">Aguarde a conclusão. A barra mostra a porcentagem quando disponível; nas demais operações, indica processamento.</p><button type="button" id="send-close" hidden>Concluir</button></dialog></main>
+<?php mysqli_close($link);include('../../baixo.php'); ?><script src="../../menu.js.php"></script><script type="application/json" id="initial-data"><?= json_encode($status,JSON_HEX_TAG|JSON_HEX_AMP|JSON_HEX_APOS|JSON_HEX_QUOT) ?></script><script src="app.js?v=3"></script></body></html>
