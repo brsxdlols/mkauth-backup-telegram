@@ -27,5 +27,5 @@ document.getElementById('latest-name').addEventListener('click',async function()
  catch(e){completeLoading('Não foi possível baixar o backup. Recarregue a página e tente novamente.',false);}
  finally{active=false;buttons.forEach(function(b){b.disabled=false;});}
 });
-form.addEventListener('submit',function(e){e.preventDefault();run('save');});document.querySelectorAll('[data-action]').forEach(function(b){b.addEventListener('click',function(){run(b.dataset.action);});});paint(JSON.parse(document.getElementById('initial-data').textContent));
+form.addEventListener('submit',function(e){e.preventDefault();run('save');});document.querySelectorAll('[data-action]').forEach(function(b){b.addEventListener('click',function(){run(b.dataset.action);});});var initial=JSON.parse(document.getElementById('initial-data').textContent);if(initial.ok){paint(initial);}else{form.querySelectorAll('input,button').forEach(function(el){el.disabled=true;});document.querySelectorAll('[data-action],#auto-toggle,#latest-name').forEach(function(el){el.disabled=true;});notice.hidden=false;notice.className='error';notice.textContent='Não foi possível carregar a configuração. Os dados salvos foram preservados. Recarregue a página antes de alterar.';}
 }());

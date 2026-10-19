@@ -18,7 +18,7 @@ DATA = '/var/lib/mka-backup-telegram'
 SERVICE = '/usr/local/lib/mka-backup-telegram/service.php'
 MENU_BEGIN = '// BACKUP TELEGRAM INICIO'
 MENU_END = '// BACKUP TELEGRAM FIM'
-MENU = MENU_BEGIN + '\nadd_menu.provedor(JSON.stringify({plink: window.location.origin + "/admin/addons/backup_telegram/", ptext: "<b>Backup Telegram</b>"}));\n' + MENU_END
+MENU = MENU_BEGIN + '\nadd_menu.provedor(JSON.stringify({plink: window.location.origin + "/admin/addons/backup_telegram/", ptext: "&#128190; Backup Telegram"}));\n' + MENU_END
 
 
 def verify():
@@ -155,7 +155,7 @@ def install(prefix):
         for old in sorted(backups.glob('install-*'), key=lambda item: item.stat().st_mtime, reverse=True)[5:]:
             if old.is_dir() and not old.is_symlink() and old.resolve().parent == backups.resolve():
                 shutil.rmtree(str(old))
-        print('Instalado: Provedor > Backup Telegram (v1.3.0).')
+        print('Instalado: Provedor > Backup Telegram (v1.3.2).')
         print('Configuração local preservada. Nenhum envio de teste foi iniciado.')
         print('Retenção: 100 operações e 5 snapshots de instalação. Backups MK-AUTH não são removidos.')
     except BaseException:
