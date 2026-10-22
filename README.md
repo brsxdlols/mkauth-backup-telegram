@@ -7,7 +7,7 @@ Addon desenvolvido para configurar o envio automático do backup MK-AUTH ao Tele
 - Busca de chats pelo token digitado, seleção de grupo ou conversa e guia de criação do bot. A busca não salva o destino automaticamente, não remove webhooks e não confirma ou apaga atualizações do bot.
 
 
-- Token em texto visível, Chat ID e nome do MK-AUTH na tela de configuração.
+- Token oculto por padrão; visualização mediante senha validada no servidor, Chat ID e nome do MK-AUTH na tela de configuração.
 - Ativação/desativação imediata e horário diário configurável.
 - Teste de integração: valida o bot, consulta o chat e envia uma mensagem de confirmação.
 - Envio imediato e opção de salvar e enviar agora.
@@ -27,7 +27,7 @@ O addon usa a autenticação nativa e exige `sis_perm.perm_backup = sim` para o 
 Como root, baixe o instalador e execute:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/brsxdlols/mkauth-backup-telegram/v1.3.2/instalar.sh -o /root/instalar-backup-telegram.sh
+curl -fsSL https://raw.githubusercontent.com/brsxdlols/mkauth-backup-telegram/v1.4.0/instalar.sh -o /root/instalar-backup-telegram.sh
 bash /root/instalar-backup-telegram.sh
 ```
 
@@ -48,7 +48,7 @@ Se houver uma rotina diferente, múltiplos agendamentos ou configuração não r
 3. Use **Sincronizar e testar integração**. Em conversa privada, inicie o bot antes. Em grupos, adicione o bot e permita o envio de documentos.
 4. Use **Testar integridade do backup** e **Enviar backup agora** quando desejar.
 
-O token fica visível para operadores com permissão de backup. O serviço não inclui tokens nem respostas brutas do Telegram no histórico. O envio usa o horário configurado no PHP do servidor, que deve corresponder ao horário local desejado.
+O token salvo não é enviado no carregamento da página nem na consulta de status. Somente operadores com permissão de backup e a senha local podem visualizá-lo. A exibição dura 30 segundos, e cinco senhas incorretas bloqueiam novas tentativas por cinco minutos. Substituir o token continua permitido sem a senha extra. O serviço não inclui tokens nem respostas brutas do Telegram no histórico. O envio usa o horário configurado no PHP do servidor, que deve corresponder ao horário local desejado.
 
 ## O que é testado
 
@@ -70,4 +70,14 @@ Configuração e histórico ficam fora da pasta pública, com arquivos `600` em 
 
 ## Validação e origem
 
-A versão 1.3.2 foi preparada a partir do addon usado no Visual Net. Os testes de instalação usam uma árvore temporária isolada; não acionam envio nem restauração. Credenciais, configurações e arquivos de backup de produção não são distribuídos.
+A versão 1.4.0 foi preparada a partir do addon usado no Visual Net. Os testes de instalação usam uma árvore temporária isolada; não acionam envio nem restauração. Credenciais, configurações e arquivos de backup de produção não são distribuídos.
+
+## Senha de visualização do token
+
+Atualizações preservam a senha local existente em `security.json`. O pacote público não contém senha padrão nem o hash de produção. Em uma instalação nova, defina a senha no servidor:
+
+```bash
+python3 /usr/local/lib/mka-backup-telegram/set-reveal-password.py
+```
+
+O comando pede e confirma a senha sem exibi-la. Até defini-la, salvar um novo token, agendar e enviar continuam disponíveis; a visualização do token salvo permanece bloqueada.

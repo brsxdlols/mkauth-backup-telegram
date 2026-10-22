@@ -118,8 +118,13 @@ def install(prefix):
             # Avoid a second automatic send on migration day.
             put(DATA + '/schedule.json', json.dumps({'date': datetime.date.today().isoformat()}).encode(), 0o600)
         put(SERVICE, (SOURCE / 'service/service.php').read_bytes())
+        put('/usr/local/lib/mka-backup-telegram/set-reveal-password.py', (SOURCE / 'service/set-reveal-password.py').read_bytes(), 0o700)
         for name in ['index.php', 'app.css', 'app.js', 'manifest.json']:
-            put(WEB + '/' + name, (SOURCE / 'addon' / name).read_bytes())
+            payload = (SOURCE / 'addon' / name).read_bytes()
+            existing = target(WEB + '/' + name)
+            if name == 'index.php' and existing.exists() and b"'/usr/bin/aa-exec'" in existing.read_bytes():
+                payload = payload.replace(b"['/usr/bin/sudo','-n','/usr/bin/php','/usr/local/lib/mka-backup-telegram/service.php']", b"['/usr/bin/sudo','-n','/usr/bin/aa-exec','-p','mka-backup-telegram','--','/usr/bin/php','-d','opcache.enable_cli=0','-d','pcre.jit=0','/usr/local/lib/mka-backup-telegram/service.php']")
+            put(WEB + '/' + name, payload)
         # A tiny wrapper replaces a deployment-specific symlink.
         wrapper = target(WEB + '/addons.class.php')
         if wrapper.is_symlink():
@@ -155,8 +160,10 @@ def install(prefix):
         for old in sorted(backups.glob('install-*'), key=lambda item: item.stat().st_mtime, reverse=True)[5:]:
             if old.is_dir() and not old.is_symlink() and old.resolve().parent == backups.resolve():
                 shutil.rmtree(str(old))
-        print('Instalado: Provedor > Backup Telegram (v1.3.2).')
+        print('Instalado: Provedor > Backup Telegram (v1.4.0).')
         print('Configuração local preservada. Nenhum envio de teste foi iniciado.')
+        if not target(DATA + '/security.json').exists():
+            print('Para definir a senha de visualização: python3 /usr/local/lib/mka-backup-telegram/set-reveal-password.py')
         print('Retenção: 100 operações e 5 snapshots de instalação. Backups MK-AUTH não são removidos.')
     except BaseException:
         for path, previous, mode in reversed(records):

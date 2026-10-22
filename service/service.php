@@ -14,7 +14,7 @@ function api($c,$method,$data=[]) {
 $a=isset($argv[1])&&$argv[1]==='tick'?['action'=>'tick']:json_decode(stream_get_contents(STDIN,8193),true);
 $c=readj('config.json');$action=is_array($a)?($a['action']??''):'';
 try {
- if($action==='status') { $p=latest(); echo json_encode(['ok'=>true,'config'=>['chat'=>$c['chat']??'','name'=>$c['name']??'','time'=>$c['time']??'06:30','enabled'=>!empty($c['enabled']),'token_set'=>!empty($c['token']),'token'=>$c['token']??''],'latest'=>$p?['name'=>basename($p),'size'=>filesize($p),'date'=>date('d/m/Y H:i',filemtime($p))]:null,'progress'=>readj('progress.json'),'history'=>readj('history.json'),'timezone'=>date_default_timezone_get()]);exit; }
+ if($action==='status') { $p=latest(); echo json_encode(['ok'=>true,'config'=>['chat'=>$c['chat']??'','name'=>$c['name']??'','time'=>$c['time']??'06:30','enabled'=>!empty($c['enabled']),'token_set'=>!empty($c['token'])],'latest'=>$p?['name'=>basename($p),'size'=>filesize($p),'date'=>date('d/m/Y H:i',filemtime($p))]:null,'progress'=>readj('progress.json'),'history'=>readj('history.json'),'timezone'=>date_default_timezone_get()]);exit; }
  if($action==='discover'){
  $token=trim((string)($a['token']??''));if($token==='')$token=$c['token']??'';
  if(!preg_match('/^\d{5,20}:[A-Za-z0-9_-]{20,150}$/D',$token))throw new Exception('Informe o token do bot antes de buscar chats.');
@@ -30,6 +30,15 @@ try {
  if($action==='inspect'){
  $p=latest();if(!$p)throw new Exception('Nenhum backup disponível.');if(time()-filemtime($p)<120)throw new Exception('Aguarde a geração do backup terminar.');if(file_get_contents($p,false,null,0,3)!=='BZh')throw new Exception('Formato não reconhecido para validação.');$before=stat($p);
  $job=proc_open(['/usr/bin/timeout','120','/bin/bzip2','-t',$p],[['file','/dev/null','r'],['file','/dev/null','w'],['file','/dev/null','w']],$pipes);if(!is_resource($job)||proc_close($job)!==0)throw new Exception('Teste falhou ou excedeu o tempo limite. O arquivo pode estar incompleto ou corrompido.');clearstatcache(true,$p);$after=stat($p);if($before['size']!==$after['size']||$before['mtime']!==$after['mtime'])throw new Exception('Arquivo alterado durante a verificação. Repita o teste.');$message='Compressão bzip2 íntegra, sem corrupção detectada: '.basename($p).'. SHA-256: '.hash_file('sha256',$p).'. Não substitui uma restauração de teste.';$history=readj('history.json');array_unshift($history,['date'=>date('d/m/Y H:i:s'),'action'=>'inspect','ok'=>true,'message'=>$message]);writej('history.json',array_slice($history,0,100));echo json_encode(['ok'=>true,'message'=>$message]);exit;
+ }
+ if($action==='reveal'){
+ $security=readj('security.json');$attempts=readj('reveal-attempts.json');
+ if(($attempts['blocked_until']??0)>time())throw new Exception('Muitas tentativas. Aguarde cinco minutos e tente novamente.');
+ $password=$a['reveal_password']??'';
+ if(!is_string($password)||strlen($password)>200||empty($security['reveal_hash'])||!password_verify($password,$security['reveal_hash'])){
+ $count=(int)($attempts['count']??0)+1;writej('reveal-attempts.json',['count'=>$count>=5?0:$count,'blocked_until'=>$count>=5?time()+300:0]);throw new Exception('Senha de visualização incorreta.');
+ }
+ writej('reveal-attempts.json',['count'=>0,'blocked_until'=>0]);echo json_encode(['ok'=>true,'token'=>$c['token']??'']);exit;
  }
  if($action==='save') {
   $token=trim((string)($a['token']??''));if($token==='')$token=$c['token']??'';
@@ -47,4 +56,4 @@ try {
  if($action==='test') { $bot=api($c,'getMe'); api($c,'getChat',['chat_id'=>$c['chat']]);api($c,'sendMessage',['chat_id'=>$c['chat'],'text'=>'✅ Integração de backup MK-AUTH validada: '.$c['name']]);$message='Integração validada e mensagem recebida pelo chat. Bot: @'.($bot['username']??''); }
  else { writej('progress.json',['percent'=>0,'phase'=>'Preparando envio…','updated'=>time()]);$p=latest();if(!$p)throw new Exception('Nenhum backup encontrado em /opt/mk-auth/bckp.');if(time()-filemtime($p)<120)throw new Exception('O backup é muito recente e pode estar sendo gerado. Aguarde dois minutos.');if(filesize($p)>50*1024*1024)throw new Exception('O backup ultrapassa 50 MB, limite adotado para a API do Telegram.');if(filesize($p)===0)throw new Exception('O arquivo de backup está vazio.');$size=filesize($p);$mtime=filemtime($p);$caption='💾 MK-AUTH: '.$c['name']."\n📦 Backup: ".basename($p)."\n🕐 Gerado: ".date('d/m/Y H:i:s',$mtime)."\n📤 Enviado: ".date('d/m/Y H:i:s'); api($c,'sendDocument',['chat_id'=>$c['chat'],'document'=>new CURLFile($p),'caption'=>$caption]);$message='Backup '.basename($p).' enviado com sucesso.'; }
  $history=readj('history.json');array_unshift($history,['date'=>date('d/m/Y H:i:s'),'action'=>$action,'ok'=>true,'message'=>$message]);writej('history.json',array_slice($history,0,100));echo json_encode(['ok'=>true,'message'=>$message]);
-} catch(Throwable $e) { $message=$e instanceof Exception?$e->getMessage():'Falha interna na operação.';if(!in_array($action,['status','save','discover'],true)){$h=readj('history.json');array_unshift($h,['date'=>date('d/m/Y H:i:s'),'action'=>$action,'ok'=>false,'message'=>$message]);writej('history.json',array_slice($h,0,100));} echo json_encode(['ok'=>false,'message'=>$message]);exit(1); }
+} catch(Throwable $e) { $message=$e instanceof Exception?$e->getMessage():'Falha interna na operação.';if(!in_array($action,['status','save','discover','reveal'],true)){$h=readj('history.json');array_unshift($h,['date'=>date('d/m/Y H:i:s'),'action'=>$action,'ok'=>false,'message'=>$message]);writej('history.json',array_slice($h,0,100));} echo json_encode(['ok'=>false,'message'=>$message]);exit(1); }
