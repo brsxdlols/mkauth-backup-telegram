@@ -18,7 +18,7 @@ Addon desenvolvido para configurar o envio automático do backup MK-AUTH ao Tele
 
 ## Requisitos
 
-Linux com MK-AUTH em `/opt/mk-auth`, PHP CLI e web 8.0 ou superior, extensões curl/json/mysqli/posix, Python 3.6 ou superior, sudo/visudo, cron, bzip2 e timeout. A instalação pela internet requer curl e tar. O usuário do servidor web deve ser `www-data`.
+Linux com MK-AUTH em `/opt/mk-auth`, PHP CLI e web 7.3 ou superior, extensões curl/json/mysqli/posix, Python 3.6 ou superior, sudo/visudo, cron, bzip2 e timeout. A instalação pela internet requer curl e tar. O usuário do servidor web deve ser `www-data`.
 
 O addon usa a autenticação nativa e exige `sis_perm.perm_backup = sim` para o operador. Não amplia as permissões de usuários ou grupos. A conexão ao banco é obtida da configuração nativa `/opt/mk-auth/include/conexao.php`; não há senha de banco no pacote. Não depende do relatório de clientes offline.
 
@@ -27,7 +27,7 @@ O addon usa a autenticação nativa e exige `sis_perm.perm_backup = sim` para o 
 Como root, baixe o instalador e execute:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/brsxdlols/mkauth-backup-telegram/v1.4.0/instalar.sh -o /root/instalar-backup-telegram.sh
+curl -fsSL https://raw.githubusercontent.com/brsxdlols/mkauth-backup-telegram/v1.5.0/instalar.sh -o /root/instalar-backup-telegram.sh
 bash /root/instalar-backup-telegram.sh
 ```
 
@@ -48,7 +48,7 @@ Se houver uma rotina diferente, múltiplos agendamentos ou configuração não r
 3. Use **Sincronizar e testar integração**. Em conversa privada, inicie o bot antes. Em grupos, adicione o bot e permita o envio de documentos.
 4. Use **Testar integridade do backup** e **Enviar backup agora** quando desejar.
 
-O token salvo não é enviado no carregamento da página nem na consulta de status. Somente operadores com permissão de backup e a senha local podem visualizá-lo. A exibição dura 30 segundos, e cinco senhas incorretas bloqueiam novas tentativas por cinco minutos. Substituir o token continua permitido sem a senha extra. O serviço não inclui tokens nem respostas brutas do Telegram no histórico. O envio usa o horário configurado no PHP do servidor, que deve corresponder ao horário local desejado.
+O token salvo não é enviado no carregamento da página nem na consulta de status. Somente operadores com permissão de backup e a senha do usuário conectado ao MK-AUTH podem visualizá-lo. A exibição dura 30 segundos, e cinco senhas incorretas bloqueiam novas tentativas por cinco minutos. Substituir o token continua permitido sem a senha extra. O serviço não inclui tokens nem respostas brutas do Telegram no histórico. O envio usa o horário configurado no PHP do servidor, que deve corresponder ao horário local desejado.
 
 ## O que é testado
 
@@ -63,21 +63,21 @@ O addon envia arquivos já gerados pelo MK-AUTH; ele não cria backups. O envio 
 | `/opt/mk-auth/admin/addons/backup_telegram/` | Interface |
 | `/usr/local/lib/mka-backup-telegram/service.php` | Serviço root com operações fixas |
 | `/var/lib/mka-backup-telegram/` | Configuração e histórico, acesso root |
-| `/etc/sudoers.d/mka-backup-telegram` | Autoriza somente o comando fixo do serviço |
+| `/etc/sudoers.d/mka-backup-telegram` | Autoriza somente o comando fixo do serviço (também no bloco gerenciado de `/etc/sudoers`) |
 | `/etc/cron.d/mka-backup-telegram` | Verifica a execução diária a cada minuto |
 
 Configuração e histórico ficam fora da pasta pública, com arquivos `600` em diretório `700`. O instalador conserva **5 snapshots** de instalação sob `install-backups`, com índice `rollback.json`; só esses snapshots próprios são elegíveis para retenção. Não remove backups `.maz`, nem modifica dados ou logs do RADIUS/MySQL. O serviço não mantém cópias locais adicionais dos backups.
 
 ## Validação e origem
 
-A versão 1.4.0 foi preparada a partir do addon usado no Visual Net. Os testes de instalação usam uma árvore temporária isolada; não acionam envio nem restauração. Credenciais, configurações e arquivos de backup de produção não são distribuídos.
+A versão 1.5.0 foi preparada a partir do addon usado no Visual Net. Os testes de instalação usam uma árvore temporária isolada; não acionam envio nem restauração. Credenciais, configurações e arquivos de backup de produção não são distribuídos.
 
-## Senha de visualização do token
+## Confirmação para visualizar o token
 
-Atualizações preservam a senha local existente em `security.json`. O pacote público não contém senha padrão nem o hash de produção. Em uma instalação nova, defina a senha no servidor:
+A visualização exige a senha do próprio usuário conectado ao MK-AUTH, a conta ativa e a permissão de backup. A verificação segue a transformação SHA-256 da tela de login nativa e a validação bcrypt. Não é criada senha separada, e nenhuma senha do MK-AUTH é alterada.
 
-```bash
-python3 /usr/local/lib/mka-backup-telegram/set-reveal-password.py
-```
+## Compatibilidade e proteção do serviço
 
-O comando pede e confirma a senha sem exibi-la. Até defini-la, salvar um novo token, agendar e enviar continuam disponíveis; a visualização do token salvo permanece bloqueada.
+A versão 1.5.0 suporta PHP 7.3 e 8.x e não altera o PHP padrão do servidor. As chamadas de processos são convertidas em comandos com argumentos individualmente escapados, compatíveis com PHP 7.3. O instalador mostra a versão detectada e informa requisitos ausentes.
+
+Em MK-AUTH com os perfis AppArmor nativos ativos, instala um perfil dedicado ao serviço e uma transição específica; não desativa o AppArmor nem remove a proteção de rede dos processos web. O perfil permite leitura dos backups e configuração nativa, gravação no diretório privado do addon e comunicação de rede do serviço. O comando autorizado fica registrado no arquivo principal de sudoers, dentro de um bloco identificado, para resistir à recriação de sudoers.d.

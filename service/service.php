@@ -1,6 +1,10 @@
 <?php
 // Root-only backend. Never return Telegram responses, URLs or credentials.
 if (PHP_SAPI !== 'cli' || posix_geteuid() !== 0) exit(1);
+function backup_process_open($command,$descriptors,&$pipes) {
+ if(is_array($command))$command=implode(' ',array_map('escapeshellarg',$command));
+ return proc_open($command,$descriptors,$pipes);
+}
 const STATE = '/var/lib/mka-backup-telegram';
 function readj($name, $default=[]) { $v=json_decode(@file_get_contents(STATE.'/'.$name),true); return is_array($v)?$v:$default; }
 function writej($name,$v) { $p=STATE.'/'.$name; $t=$p.'.tmp'; if(file_put_contents($t,json_encode($v,JSON_UNESCAPED_UNICODE),LOCK_EX)===false) throw new Exception('Falha ao salvar configuração.'); chmod($t,0600); rename($t,$p); }
@@ -29,16 +33,25 @@ try {
  if($action==='toggle'){$c['enabled']=!empty($a['enabled']);writej('config.json',$c);echo json_encode(['ok'=>true,'message'=>$c['enabled']?'Envio automático ativado.':'Envio automático desativado.']);exit;}
  if($action==='inspect'){
  $p=latest();if(!$p)throw new Exception('Nenhum backup disponível.');if(time()-filemtime($p)<120)throw new Exception('Aguarde a geração do backup terminar.');if(file_get_contents($p,false,null,0,3)!=='BZh')throw new Exception('Formato não reconhecido para validação.');$before=stat($p);
- $job=proc_open(['/usr/bin/timeout','120','/bin/bzip2','-t',$p],[['file','/dev/null','r'],['file','/dev/null','w'],['file','/dev/null','w']],$pipes);if(!is_resource($job)||proc_close($job)!==0)throw new Exception('Teste falhou ou excedeu o tempo limite. O arquivo pode estar incompleto ou corrompido.');clearstatcache(true,$p);$after=stat($p);if($before['size']!==$after['size']||$before['mtime']!==$after['mtime'])throw new Exception('Arquivo alterado durante a verificação. Repita o teste.');$message='Compressão bzip2 íntegra, sem corrupção detectada: '.basename($p).'. SHA-256: '.hash_file('sha256',$p).'. Não substitui uma restauração de teste.';$history=readj('history.json');array_unshift($history,['date'=>date('d/m/Y H:i:s'),'action'=>'inspect','ok'=>true,'message'=>$message]);writej('history.json',array_slice($history,0,100));echo json_encode(['ok'=>true,'message'=>$message]);exit;
+ $job=backup_process_open(['/usr/bin/timeout','120','/bin/bzip2','-t',$p],[['file','/dev/null','r'],['file','/dev/null','w'],['file','/dev/null','w']],$pipes);if(!is_resource($job)||proc_close($job)!==0)throw new Exception('Teste falhou ou excedeu o tempo limite. O arquivo pode estar incompleto ou corrompido.');clearstatcache(true,$p);$after=stat($p);if($before['size']!==$after['size']||$before['mtime']!==$after['mtime'])throw new Exception('Arquivo alterado durante a verificação. Repita o teste.');$message='Compressão bzip2 íntegra, sem corrupção detectada: '.basename($p).'. SHA-256: '.hash_file('sha256',$p).'. Não substitui uma restauração de teste.';$history=readj('history.json');array_unshift($history,['date'=>date('d/m/Y H:i:s'),'action'=>'inspect','ok'=>true,'message'=>$message]);writej('history.json',array_slice($history,0,100));echo json_encode(['ok'=>true,'message'=>$message]);exit;
  }
  if($action==='reveal'){
- $security=readj('security.json');$attempts=readj('reveal-attempts.json');
+ $login=$a['native_user']??'';$password=$a['reveal_password']??'';
+ if(!is_string($login)||$login===''||strlen($login)>255||!is_string($password)||strlen($password)>200)throw new Exception('Confirme a senha do usuário conectado ao MK-AUTH.');
+ $attemptFile='native-reveal-'.hash('sha256',$login).'.json';$attempts=readj($attemptFile);
  if(($attempts['blocked_until']??0)>time())throw new Exception('Muitas tentativas. Aguarde cinco minutos e tente novamente.');
- $password=$a['reveal_password']??'';
- if(!is_string($password)||strlen($password)>200||empty($security['reveal_hash'])||!password_verify($password,$security['reveal_hash'])){
- $count=(int)($attempts['count']??0)+1;writej('reveal-attempts.json',['count'=>$count>=5?0:$count,'blocked_until'=>$count>=5?time()+300:0]);throw new Exception('Senha de visualização incorreta.');
- }
- writej('reveal-attempts.json',['count'=>0,'blocked_until'=>0]);echo json_encode(['ok'=>true,'token'=>$c['token']??'']);exit;
+ $verified=false;
+ // Native database bootstrap is scoped to the function: no credential duplication.
+ $verifyNative=function($login,$password){
+  require '/opt/mk-auth/include/conexao.php';
+  $stmt=$LOADMYSQL->prepare("SELECT a.sha FROM sis_acesso a WHERE a.login=? AND a.ativo='sim' AND EXISTS(SELECT 1 FROM sis_perm p WHERE p.usuario=a.login AND p.nome='perm_backup' AND p.permissao='sim') LIMIT 1");
+  if(!$stmt)throw new Exception('Não foi possível validar o usuário no MK-AUTH.');
+  $stmt->bind_param('s',$login);$stmt->execute();$stmt->bind_result($hash);$found=$stmt->fetch();$stmt->close();$LOADMYSQL->close();
+  return $found && is_string($hash) && password_verify(hash('sha256',$password),$hash);
+ };
+ $verified=$verifyNative($login,$password);
+ if(!$verified){$count=(int)($attempts['count']??0)+1;writej($attemptFile,['count'=>$count>=5?0:$count,'blocked_until'=>$count>=5?time()+300:0]);throw new Exception('Senha incorreta ou usuário sem permissão de backup. Use a senha do usuário conectado ao MK-AUTH.');}
+ writej($attemptFile,['count'=>0,'blocked_until'=>0]);echo json_encode(['ok'=>true,'token'=>$c['token']??'']);exit;
  }
  if($action==='save') {
   $token=trim((string)($a['token']??''));if($token==='')$token=$c['token']??'';

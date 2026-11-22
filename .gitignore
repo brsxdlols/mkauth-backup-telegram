@@ -12,3 +12,8 @@ progress.json
 __pycache__/
 *.pyc
 install-backups/
+
+security.json
+reveal-attempts*.json
+native-reveal-*.json
+command.json

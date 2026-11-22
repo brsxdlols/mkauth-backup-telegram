@@ -11,6 +11,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
+from runtime import configure_runtime
 
 SOURCE = pathlib.Path(__file__).resolve().parent
 WEB = '/opt/mk-auth/admin/addons/backup_telegram'
@@ -120,11 +121,7 @@ def install(prefix):
         put(SERVICE, (SOURCE / 'service/service.php').read_bytes())
         put('/usr/local/lib/mka-backup-telegram/set-reveal-password.py', (SOURCE / 'service/set-reveal-password.py').read_bytes(), 0o700)
         for name in ['index.php', 'app.css', 'app.js', 'manifest.json']:
-            payload = (SOURCE / 'addon' / name).read_bytes()
-            existing = target(WEB + '/' + name)
-            if name == 'index.php' and existing.exists() and b"'/usr/bin/aa-exec'" in existing.read_bytes():
-                payload = payload.replace(b"['/usr/bin/sudo','-n','/usr/bin/php','/usr/local/lib/mka-backup-telegram/service.php']", b"['/usr/bin/sudo','-n','/usr/bin/aa-exec','-p','mka-backup-telegram','--','/usr/bin/php','-d','opcache.enable_cli=0','-d','pcre.jit=0','/usr/local/lib/mka-backup-telegram/service.php']")
-            put(WEB + '/' + name, payload)
+            put(WEB + '/' + name, (SOURCE / 'addon' / name).read_bytes())
         # A tiny wrapper replaces a deployment-specific symlink.
         wrapper = target(WEB + '/addons.class.php')
         if wrapper.is_symlink():
@@ -132,15 +129,7 @@ def install(prefix):
             wrapper.unlink()
             records.append((wrapper, ('symlink', link), None))
         put(WEB + '/addons.class.php', b"<?php require_once '/opt/mk-auth/include/addons.inc.hhvm';\n")
-        sudo = 'www-data ALL=(root) NOPASSWD: /usr/bin/php ' + SERVICE + '\n'
-        with tempfile.NamedTemporaryFile(mode='w', prefix='mka-sudo-', delete=False) as stream:
-            stream.write(sudo)
-            tmp = stream.name
-        try:
-            subprocess.run(['visudo', '-cf', tmp], check=True, stdout=subprocess.DEVNULL)
-        finally:
-            os.unlink(tmp)
-        put('/etc/sudoers.d/mka-backup-telegram', sudo.encode(), 0o440)
+        php_binary = configure_runtime(prefix, target, put)
         menu_path = target('/opt/mk-auth/admin/addons/addon.js')
         menu = menu_path.read_text()
         pattern = re.escape(MENU_BEGIN) + r'.*?' + re.escape(MENU_END)
@@ -154,16 +143,15 @@ def install(prefix):
         for line in old_lines:
             cron = cron.replace(line, '# Migrado para addon Backup Telegram: ' + line)
         put('/etc/crontab', cron.encode(), cronpath.stat().st_mode & 0o777)
-        put('/etc/cron.d/mka-backup-telegram', ('SHELL=/bin/sh\nPATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin\n* * * * * root /usr/bin/php '+SERVICE+' tick >/dev/null 2>&1\n').encode())
+        put('/etc/cron.d/mka-backup-telegram', ('SHELL=/bin/sh\nPATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin\n* * * * * root '+php_binary+' '+SERVICE+' tick >/dev/null 2>&1\n').encode())
         manifest = [{'path': str(path.relative_to(prefix)), 'backup': previous.name if isinstance(previous, pathlib.Path) else previous, 'mode': mode} for path, previous, mode in records]
         (snapshot / 'rollback.json').write_text(json.dumps(manifest, indent=2))
         for old in sorted(backups.glob('install-*'), key=lambda item: item.stat().st_mtime, reverse=True)[5:]:
             if old.is_dir() and not old.is_symlink() and old.resolve().parent == backups.resolve():
                 shutil.rmtree(str(old))
-        print('Instalado: Provedor > Backup Telegram (v1.4.0).')
+        print('Instalado: Provedor > Backup Telegram (v1.5.0).')
         print('Configuração local preservada. Nenhum envio de teste foi iniciado.')
-        if not target(DATA + '/security.json').exists():
-            print('Para definir a senha de visualização: python3 /usr/local/lib/mka-backup-telegram/set-reveal-password.py')
+        print('Visualizacao do token: use a senha do usuario logado no MK-AUTH.')
         print('Retenção: 100 operações e 5 snapshots de instalação. Backups MK-AUTH não são removidos.')
     except BaseException:
         for path, previous, mode in reversed(records):
