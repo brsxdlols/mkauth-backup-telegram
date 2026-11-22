@@ -14,8 +14,11 @@ def configure_runtime(prefix, target, put):
     service = '/usr/local/lib/mka-backup-telegram/service.php'
     command = [php, service]
     native_profiles = [target('/etc/apparmor.d/' + name) for name in ['sistema.php-admin', 'sistema.php-central']]
+    apache_admin = target('/etc/apparmor.d/apache2.d/admin')
+    apache_main = target('/etc/apparmor.d/usr.sbin.apache2')
+    legacy_apache = apache_admin.is_file() and apache_main.is_file()
     enabled = target('/sys/module/apparmor/parameters/enabled')
-    confined = enabled.is_file() and enabled.read_text().strip().upper() == 'Y' and any(p.is_file() for p in native_profiles)
+    confined = enabled.is_file() and enabled.read_text().strip().upper() == 'Y' and (legacy_apache or any(p.is_file() for p in native_profiles))
     if confined:
         if not shutil.which('aa-exec') or not shutil.which('apparmor_parser'):
             raise RuntimeError('AppArmor ativo, mas faltam aa-exec ou apparmor_parser.')
@@ -66,7 +69,21 @@ profile mka-backup-telegram flags=(attach_disconnected) {
                     raise RuntimeError('Perfil AppArmor nativo não reconhecido: ' + path.name)
                 updated = original[:pos] + '  ' + include + '\n' + original[pos:]
                 put('/etc/apparmor.d/' + path.name, updated.encode(), path.stat().st_mode & 0o777)
+        if legacy_apache:
+            # Legacy mod_apparmor executes admin PHP inside apache2//admin.
+            # Only the fixed sudo command can transition into the private worker.
+            put('/etc/apparmor.d/local/mka-backup-telegram-apache-admin', b'capability setuid,\ncapability setgid,\nchange_profile -> mka-backup-telegram,\n')
+            original = apache_admin.read_text()
+            admin_include = '#include if exists <local/mka-backup-telegram-apache-admin>'
+            if admin_include not in original:
+                pos = original.rfind('}')
+                if pos < 0:
+                    raise RuntimeError('Perfil administrativo do Apache nao reconhecido.')
+                updated = original[:pos] + '  ' + admin_include + '\n' + original[pos:]
+                put('/etc/apparmor.d/apache2.d/admin', updated.encode(), apache_admin.stat().st_mode & 0o777)
         profiles = [target('/etc/apparmor.d/mka-backup-telegram')] + [p for p in native_profiles if p.is_file()]
+        if legacy_apache:
+            profiles.append(apache_main)
         for path in profiles:
             subprocess.run(['apparmor_parser', '-Q', str(path)], check=True, stdout=subprocess.DEVNULL)
         if prefix == pathlib.Path('/'):

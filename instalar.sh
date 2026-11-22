@@ -2,7 +2,7 @@
 set -euo pipefail
 trap 'rc=$?; echo "Instalador interrompido na linha $LINENO (codigo $rc)." >&2' ERR
 [ "$(id -u)" = 0 ] || { echo 'Execute como root.' >&2; exit 1; }
-VERSION='v1.5.0'
+VERSION='v1.5.1'
 REPOSITORY='brsxdlols/mkauth-backup-telegram'
 TEMP_DIR="$(mktemp -d /tmp/mka-backup-telegram.XXXXXXXX)"
 trap 'rm -rf -- "$TEMP_DIR"' EXIT

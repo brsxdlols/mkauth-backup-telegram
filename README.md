@@ -18,7 +18,7 @@ Addon desenvolvido para configurar o envio automático do backup MK-AUTH ao Tele
 
 ## Requisitos
 
-Linux com MK-AUTH em `/opt/mk-auth`, PHP CLI e web 7.3 ou superior, extensões curl/json/mysqli/posix, Python 3.6 ou superior, sudo/visudo, cron, bzip2 e timeout. A instalação pela internet requer curl e tar. O usuário do servidor web deve ser `www-data`.
+Linux com MK-AUTH em `/opt/mk-auth`, PHP CLI 7.3 ou superior e PHP web 7.1 ou superior, extensões curl/json/mysqli/posix, Python 3.6 ou superior, sudo/visudo, cron, bzip2 e timeout. A instalação pela internet requer curl e tar. O usuário do servidor web deve ser `www-data`.
 
 O addon usa a autenticação nativa e exige `sis_perm.perm_backup = sim` para o operador. Não amplia as permissões de usuários ou grupos. A conexão ao banco é obtida da configuração nativa `/opt/mk-auth/include/conexao.php`; não há senha de banco no pacote. Não depende do relatório de clientes offline.
 
@@ -27,7 +27,7 @@ O addon usa a autenticação nativa e exige `sis_perm.perm_backup = sim` para o 
 Como root, baixe o instalador e execute:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/brsxdlols/mkauth-backup-telegram/v1.5.0/instalar.sh -o /root/instalar-backup-telegram.sh
+curl -fsSL https://raw.githubusercontent.com/brsxdlols/mkauth-backup-telegram/v1.5.1/instalar.sh -o /root/instalar-backup-telegram.sh
 bash /root/instalar-backup-telegram.sh
 ```
 
@@ -70,7 +70,7 @@ Configuração e histórico ficam fora da pasta pública, com arquivos `600` em 
 
 ## Validação e origem
 
-A versão 1.5.0 foi preparada a partir do addon usado no Visual Net. Os testes de instalação usam uma árvore temporária isolada; não acionam envio nem restauração. Credenciais, configurações e arquivos de backup de produção não são distribuídos.
+A versão 1.5.1 foi preparada a partir do addon usado no Visual Net. Os testes de instalação usam uma árvore temporária isolada; não acionam envio nem restauração. Credenciais, configurações e arquivos de backup de produção não são distribuídos.
 
 ## Confirmação para visualizar o token
 
@@ -78,6 +78,13 @@ A visualização exige a senha do próprio usuário conectado ao MK-AUTH, a cont
 
 ## Compatibilidade e proteção do serviço
 
-A versão 1.5.0 suporta PHP 7.3 e 8.x e não altera o PHP padrão do servidor. As chamadas de processos são convertidas em comandos com argumentos individualmente escapados, compatíveis com PHP 7.3. O instalador mostra a versão detectada e informa requisitos ausentes.
+A versão 1.5.1 suporta PHP 7.3 e 8.x e não altera o PHP padrão do servidor. As chamadas de processos são convertidas em comandos com argumentos individualmente escapados, compatíveis com PHP 7.3. O instalador mostra a versão detectada e informa requisitos ausentes.
 
 Em MK-AUTH com os perfis AppArmor nativos ativos, instala um perfil dedicado ao serviço e uma transição específica; não desativa o AppArmor nem remove a proteção de rede dos processos web. O perfil permite leitura dos backups e configuração nativa, gravação no diretório privado do addon e comunicação de rede do serviço. O comando autorizado fica registrado no arquivo principal de sudoers, dentro de um bloco identificado, para resistir à recriação de sudoers.d.
+
+### Correções da versão 1.5.1
+
+- Detecta também o AppArmor antigo do Apache (`apache2//admin`) e configura a transição para o serviço dedicado.
+- Mantém a regra sudo restrita ao comando do serviço e as configurações locais.
+- Envia os métodos comuns do Telegram como formulário URL-encoded; somente o envio de arquivos usa multipart. Isso evita o timeout causado por POST vazio em versões antigas do cURL/PHP 7.3.
+- Compatibilidade da interface validada em ambiente com PHP web 7.1.1 e serviço CLI 7.3.31.
