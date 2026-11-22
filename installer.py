@@ -12,6 +12,7 @@ import subprocess
 import sys
 import tempfile
 from runtime import configure_runtime
+from php_runtime import select_php
 
 SOURCE = pathlib.Path(__file__).resolve().parent
 WEB = '/opt/mk-auth/admin/addons/backup_telegram'
@@ -28,11 +29,14 @@ def verify():
         path = (SOURCE / name).resolve()
         if SOURCE not in path.parents or hashlib.sha256(path.read_bytes()).hexdigest() != expected:
             raise RuntimeError('Pacote inválido ou alterado: ' + name)
+    php = select_php()
     for name in ['addon/index.php', 'service/service.php']:
-        subprocess.run(['php', '-l', str(SOURCE / name)], check=True, stdout=subprocess.DEVNULL)
+        subprocess.run([php, '-l', str(SOURCE / name)], check=True, stdout=subprocess.DEVNULL)
+
+    return php
 
 
-def install(prefix):
+def install(prefix, php):
     def target(name):
         return prefix / name.lstrip('/')
 
@@ -129,7 +133,7 @@ def install(prefix):
             wrapper.unlink()
             records.append((wrapper, ('symlink', link), None))
         put(WEB + '/addons.class.php', b"<?php require_once '/opt/mk-auth/include/addons.inc.hhvm';\n")
-        php_binary = configure_runtime(prefix, target, put)
+        php_binary = configure_runtime(prefix, target, put, php)
         menu_path = target('/opt/mk-auth/admin/addons/addon.js')
         menu = menu_path.read_text()
         pattern = re.escape(MENU_BEGIN) + r'.*?' + re.escape(MENU_END)
@@ -149,7 +153,7 @@ def install(prefix):
         for old in sorted(backups.glob('install-*'), key=lambda item: item.stat().st_mtime, reverse=True)[5:]:
             if old.is_dir() and not old.is_symlink() and old.resolve().parent == backups.resolve():
                 shutil.rmtree(str(old))
-        print('Instalado: Provedor > Backup Telegram (v1.5.1).')
+        print('Instalado: Provedor > Backup Telegram (v1.5.2).')
         print('Configuração local preservada. Nenhum envio de teste foi iniciado.')
         print('Visualizacao do token: use a senha do usuario logado no MK-AUTH.')
         print('Retenção: 100 operações e 5 snapshots de instalação. Backups MK-AUTH não são removidos.')
@@ -172,14 +176,14 @@ def main():
     args = parser.parse_args()
     if os.geteuid() != 0:
         raise RuntimeError('Execute como root.')
-    verify()
+    php = verify()
     if args.check:
         print('Pacote e sintaxe PHP: OK. Nenhuma alteração realizada.')
         return
     prefix = pathlib.Path(args.root).resolve()
     if not prefix.is_dir():
         raise RuntimeError('Diretório de destino inexistente.')
-    install(prefix)
+    install(prefix, php)
 
 
 if __name__ == '__main__':

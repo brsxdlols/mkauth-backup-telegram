@@ -7,8 +7,8 @@ import subprocess
 import tempfile
 
 
-def configure_runtime(prefix, target, put):
-    php = str(pathlib.Path(shutil.which('php')).resolve())
+def configure_runtime(prefix, target, put, php):
+    php = str(pathlib.Path(php).resolve())
     if not re.match(r'^/[-./A-Za-z0-9_]+$', php):
         raise RuntimeError('Caminho do PHP não suportado.')
     service = '/usr/local/lib/mka-backup-telegram/service.php'
