@@ -153,7 +153,7 @@ def install(prefix, php):
         for old in sorted(backups.glob('install-*'), key=lambda item: item.stat().st_mtime, reverse=True)[5:]:
             if old.is_dir() and not old.is_symlink() and old.resolve().parent == backups.resolve():
                 shutil.rmtree(str(old))
-        print('Instalado: Provedor > Backup Telegram (v1.5.2).')
+        print('Instalado: Provedor > Backup Telegram (v1.5.3).')
         print('Configuração local preservada. Nenhum envio de teste foi iniciado.')
         print('Visualizacao do token: use a senha do usuario logado no MK-AUTH.')
         print('Retenção: 100 operações e 5 snapshots de instalação. Backups MK-AUTH não são removidos.')

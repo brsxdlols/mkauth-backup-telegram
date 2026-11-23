@@ -27,7 +27,7 @@ O addon usa a autenticação nativa e exige `sis_perm.perm_backup = sim` para o 
 Como root, baixe o instalador e execute:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/brsxdlols/mkauth-backup-telegram/v1.5.2/instalar.sh -o /root/instalar-backup-telegram.sh
+curl -fsSL https://raw.githubusercontent.com/brsxdlols/mkauth-backup-telegram/v1.5.3/instalar.sh -o /root/instalar-backup-telegram.sh
 bash /root/instalar-backup-telegram.sh
 ```
 
@@ -70,7 +70,7 @@ Configuração e histórico ficam fora da pasta pública, com arquivos `600` em 
 
 ## Validação e origem
 
-A versão 1.5.2 foi preparada a partir do addon usado no Visual Net. Os testes de instalação usam uma árvore temporária isolada; não acionam envio nem restauração. Credenciais, configurações e arquivos de backup de produção não são distribuídos.
+A versão 1.5.3 foi preparada a partir do addon usado no Visual Net. Os testes de instalação usam uma árvore temporária isolada; não acionam envio nem restauração. Credenciais, configurações e arquivos de backup de produção não são distribuídos.
 
 ## Confirmação para visualizar o token
 
@@ -78,19 +78,25 @@ A visualização exige a senha do próprio usuário conectado ao MK-AUTH, a cont
 
 ## Compatibilidade e proteção do serviço
 
-A versão 1.5.2 suporta PHP 7.3 e 8.x e não altera o PHP padrão do servidor. As chamadas de processos são convertidas em comandos com argumentos individualmente escapados, compatíveis com PHP 7.3. O instalador mostra a versão detectada e informa requisitos ausentes.
+A versão 1.5.3 suporta PHP 7.3 e 8.x e não altera o PHP padrão do servidor. As chamadas de processos são convertidas em comandos com argumentos individualmente escapados, compatíveis com PHP 7.3. O instalador mostra a versão detectada e informa requisitos ausentes.
 
 Em MK-AUTH com os perfis AppArmor nativos ativos, instala um perfil dedicado ao serviço e uma transição específica; não desativa o AppArmor nem remove a proteção de rede dos processos web. O perfil permite leitura dos backups e configuração nativa, gravação no diretório privado do addon e comunicação de rede do serviço. O comando autorizado fica registrado no arquivo principal de sudoers, dentro de um bloco identificado, para resistir à recriação de sudoers.d.
 
-### Correções da versão 1.5.2
+### Correções da versão 1.5.3
 
 - Detecta também o AppArmor antigo do Apache (`apache2//admin`) e configura a transição para o serviço dedicado.
 - Mantém a regra sudo restrita ao comando do serviço e as configurações locais.
 - Envia os métodos comuns do Telegram como formulário URL-encoded; somente o envio de arquivos usa multipart. Isso evita o timeout causado por POST vazio em versões antigas do cURL/PHP 7.3.
 - Compatibilidade da interface validada em ambiente com PHP web 7.1.1 e serviço CLI 7.3.31.
 
-### Detecção automática do PHP — v1.5.2
+### Detecção automática do PHP — v1.5.3
 
 O instalador verifica o PHP do PATH e os executáveis versionados em `/usr/bin`, `/usr/local/bin`, `/opt/php*/bin/php` e `/opt/mk-auth/hhvm/*/bin/php`. Seleciona a versão compatível mais recente com todas as extensões necessárias e usa esse mesmo caminho para validação, serviço, sudoers, AppArmor e cron.
 
 Assim, se o comando `php` aponta para 7.1.1, mas há 7.3 ou 8.x instalado, não é necessário alterar o PATH nem os links do sistema. A detecção é somente de leitura: não instala outro PHP e não altera o PHP padrão do MK-AUTH. Se nenhum candidato for compatível, exibe as razões antes de alterar a instalação.
+
+### Apache com DEFAULT_URI — v1.5.3
+
+O instalador configura um hat exclusivo do addon e aplica `AAHatName` apenas ao diretório `/opt/mk-auth/admin/addons/backup_telegram`. Isso cobre ambientes em que não existe o hat administrativo e as requisições caem em `DEFAULT_URI`. Não modifica as permissões dos hats padrão.
+
+A política de arquivos do hat exclusivo segue o acesso amplo já usado pelo DEFAULT_URI nativo; as capacidades de início do sudo e a transição ao serviço ficam restritas à rota do addon. O serviço continua no perfil próprio com acesso restrito aos seus arquivos. A sintaxe do Apache e dos perfis é validada antes da recarga gradual, sem reiniciar o serviço.
